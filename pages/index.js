@@ -2,6 +2,7 @@ import Head from "next/head"
 import { useEffect, useState } from "react"
 import {
   RiAddLine,
+  RiCloseLine,
   RiDeleteBin6Line,
   RiExternalLinkLine,
   RiLoader4Line,
@@ -56,6 +57,59 @@ async function getImageAspectRatio(file) {
   } finally {
     URL.revokeObjectURL(objectUrl)
   }
+}
+
+function ConfirmModal({ action, busy, onCancel, onConfirm }) {
+  if (!action) {
+    return null
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[28px] border border-stone-200 bg-white p-6 shadow-[0_30px_120px_rgba(28,25,23,0.2)]">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
+              Confirm action
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-stone-900">
+              {action.title}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-full border border-stone-200 p-2 text-stone-500 transition hover:border-stone-900 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RiCloseLine size={16} />
+          </button>
+        </div>
+
+        <p className="text-sm leading-7 text-stone-500">{action.message}</p>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-full border border-stone-300 px-5 py-2.5 text-sm font-medium text-stone-700 transition hover:border-stone-900 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+          >
+            {busy ? <RiLoader4Line className="animate-spin" size={16} /> : null}
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function CategoryEditor({
@@ -274,6 +328,7 @@ export default function AdminSite() {
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState("")
   const [imageForms, setImageForms] = useState({})
+  const [confirmAction, setConfirmAction] = useState(null)
 
   const loadPortfolio = async () => {
     setLoading(true)
@@ -357,19 +412,23 @@ export default function AdminSite() {
     })
   }
 
-  const removeCategory = async (categoryId, categoryName) => {
-    if (!window.confirm(`Delete ${categoryName} and all of its images?`)) {
-      return
-    }
+  const requestCategoryDelete = (categoryId, categoryName) => {
+    setConfirmAction({
+      key: `delete-category-${categoryId}`,
+      title: `Delete ${categoryName}?`,
+      message: "This will remove the category and all images inside it.",
+      run: async () => {
+        await withBusy(`delete-category-${categoryId}`, async () => {
+          const response = await fetch(`/api/categories/${categoryId}`, {
+            method: "DELETE",
+          })
+          await parseApiResponse(response)
 
-    await withBusy(`delete-category-${categoryId}`, async () => {
-      const response = await fetch(`/api/categories/${categoryId}`, {
-        method: "DELETE",
-      })
-      await parseApiResponse(response)
-
-      setStatus(`Deleted ${categoryName}.`)
-      await loadPortfolio()
+          setStatus(`Deleted ${categoryName}.`)
+          setConfirmAction(null)
+          await loadPortfolio()
+        })
+      },
     })
   }
 
@@ -433,20 +492,30 @@ export default function AdminSite() {
     })
   }
 
-  const removeImage = async (imageId) => {
-    if (!window.confirm("Delete this image?")) {
-      return
-    }
+  const requestImageDelete = (imageId) => {
+    setConfirmAction({
+      key: `delete-image-${imageId}`,
+      title: "Delete this image?",
+      message: "This will remove the image record and delete the S3 object.",
+      run: async () => {
+        await withBusy(`delete-image-${imageId}`, async () => {
+          const response = await fetch(`/api/images/${imageId}`, {
+            method: "DELETE",
+          })
+          await parseApiResponse(response)
 
-    await withBusy(`delete-image-${imageId}`, async () => {
-      const response = await fetch(`/api/images/${imageId}`, {
-        method: "DELETE",
-      })
-      await parseApiResponse(response)
-
-      setStatus("Image deleted.")
-      await loadPortfolio()
+          setStatus("Image deleted.")
+          setConfirmAction(null)
+          await loadPortfolio()
+        })
+      },
     })
+  }
+
+  const closeConfirmModal = () => {
+    if (!busyKey.startsWith("delete-")) {
+      setConfirmAction(null)
+    }
   }
 
   return (
@@ -530,9 +599,9 @@ export default function AdminSite() {
                   imageForm={imageForms[category.id] || defaultImageForm()}
                   onImageFormChange={updateImageForm}
                   onCategoryRename={renameCategory}
-                  onCategoryDelete={removeCategory}
+                  onCategoryDelete={requestCategoryDelete}
                   onImageCreate={createImage}
-                  onImageDelete={removeImage}
+                  onImageDelete={requestImageDelete}
                   busy={busyKey.startsWith("upload-") || busyKey.includes(category.id)}
                 />
               ))}
@@ -540,6 +609,13 @@ export default function AdminSite() {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        action={confirmAction}
+        busy={confirmAction ? busyKey === confirmAction.key : false}
+        onCancel={closeConfirmModal}
+        onConfirm={() => confirmAction?.run()}
+      />
     </>
   )
 }
