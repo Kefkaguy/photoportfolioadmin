@@ -1,18 +1,23 @@
-import { deleteImage } from "@/lib/portfolio"
+import { deleteImage, updateImage } from "@/lib/portfolio"
 import { deleteS3Object } from "@/lib/s3"
 
 export default async function handler(req, res) {
-  if (req.method !== "DELETE") {
-    res.setHeader("Allow", "DELETE")
-    return res.status(405).json({ error: "Method not allowed" })
-  }
-
   const { id } = req.query
 
   try {
-    const result = await deleteImage(id)
-    await deleteS3Object(result.s3Key)
-    return res.status(200).json({ deleted: true })
+    if (req.method === "PUT") {
+      const image = await updateImage(id, req.body || {})
+      return res.status(200).json(image)
+    }
+
+    if (req.method === "DELETE") {
+      const result = await deleteImage(id)
+      await deleteS3Object(result.s3Key)
+      return res.status(200).json({ deleted: true })
+    }
+
+    res.setHeader("Allow", "PUT, DELETE")
+    return res.status(405).json({ error: "Method not allowed" })
   } catch (error) {
     return res.status(400).json({ error: error.message })
   }

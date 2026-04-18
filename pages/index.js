@@ -7,6 +7,8 @@ import {
   RiExternalLinkLine,
   RiLoader4Line,
   RiSave3Line,
+  RiStarFill,
+  RiStarLine,
   RiUploadCloud2Line,
 } from "react-icons/ri"
 
@@ -39,6 +41,16 @@ function defaultImageForm() {
     aspectRatio: "4/5",
     featured: false,
     file: null,
+  }
+}
+
+function defaultEditForm(image) {
+  return {
+    title: image.title || "",
+    alt: image.alt || "",
+    description: image.description || "",
+    aspectRatio: image.aspectRatio || "4/5",
+    featured: Boolean(image.featured),
   }
 }
 
@@ -112,13 +124,107 @@ function ConfirmModal({ action, busy, onCancel, onConfirm }) {
   )
 }
 
+function ImageCard({
+  image,
+  form,
+  busy,
+  onChange,
+  onSave,
+  onToggleFeatured,
+  onDelete,
+}) {
+  return (
+    <article className="overflow-hidden rounded-[24px] border border-stone-200 bg-stone-50">
+      <div className="relative bg-stone-200" style={{ aspectRatio: image.aspectRatio || "4/5" }}>
+        <img src={image.src} alt={image.alt} className="h-full w-full object-cover" />
+        <button
+          type="button"
+          onClick={() => onToggleFeatured(image)}
+          disabled={busy}
+          className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-white backdrop-blur transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {image.featured ? <RiStarFill size={14} /> : <RiStarLine size={14} />}
+          {image.featured ? "Featured" : "Set featured"}
+        </button>
+      </div>
+
+      <div className="space-y-3 p-4">
+        <input
+          type="text"
+          value={form.title}
+          onChange={(event) => onChange(image.id, "title", event.target.value)}
+          placeholder="Image title"
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+        />
+        <input
+          type="text"
+          value={form.alt}
+          onChange={(event) => onChange(image.id, "alt", event.target.value)}
+          placeholder="Alt text"
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+        />
+        <textarea
+          value={form.description}
+          onChange={(event) => onChange(image.id, "description", event.target.value)}
+          placeholder="Description"
+          rows={3}
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+        />
+        <input
+          type="text"
+          value={form.aspectRatio}
+          onChange={(event) => onChange(image.id, "aspectRatio", event.target.value)}
+          placeholder="Aspect ratio"
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+        />
+
+        <div className="flex items-center justify-between gap-2">
+          <a
+            href={image.src}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900"
+          >
+            Open
+            <RiExternalLinkLine size={14} />
+          </a>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onSave(image.id)}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+            >
+              <RiSave3Line size={15} />
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(image.id)}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-full border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RiDeleteBin6Line size={15} />
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+  )
+}
+
 function CategoryEditor({
   category,
   imageForm,
+  imageEditForms,
   onImageFormChange,
+  onImageEditFormChange,
   onCategoryRename,
   onCategoryDelete,
   onImageCreate,
+  onImageSave,
+  onImageToggleFeatured,
   onImageDelete,
   busy,
 }) {
@@ -260,53 +366,16 @@ function CategoryEditor({
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {category.items.map((image) => (
-            <article
+            <ImageCard
               key={image.id}
-              className="overflow-hidden rounded-[24px] border border-stone-200 bg-stone-50"
-            >
-              <div className="relative bg-stone-200" style={{ aspectRatio: image.aspectRatio || "4/5" }}>
-                <img src={image.src} alt={image.alt} className="h-full w-full object-cover" />
-              </div>
-              <div className="space-y-3 p-4">
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-stone-900">
-                      {image.title}
-                    </h3>
-                    {image.featured ? (
-                      <span className="rounded-full bg-stone-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
-                        Featured
-                      </span>
-                    ) : null}
-                  </div>
-                  {image.description ? (
-                    <p className="mt-2 text-sm leading-6 text-stone-500">
-                      {image.description}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <a
-                    href={image.src}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-[0.18em] text-stone-500 hover:text-stone-900"
-                  >
-                    Open
-                    <RiExternalLinkLine size={14} />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => onImageDelete(image.id)}
-                    disabled={busy}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RiDeleteBin6Line size={15} />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </article>
+              image={image}
+              form={imageEditForms[image.id] || defaultEditForm(image)}
+              busy={busy}
+              onChange={onImageEditFormChange}
+              onSave={onImageSave}
+              onToggleFeatured={onImageToggleFeatured}
+              onDelete={onImageDelete}
+            />
           ))}
 
           {category.items.length === 0 ? (
@@ -328,6 +397,7 @@ export default function AdminSite() {
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState("")
   const [imageForms, setImageForms] = useState({})
+  const [imageEditForms, setImageEditForms] = useState({})
   const [confirmAction, setConfirmAction] = useState(null)
 
   const loadPortfolio = async () => {
@@ -343,6 +413,15 @@ export default function AdminSite() {
         const next = { ...current }
         for (const category of data.images || []) {
           next[category.id] = next[category.id] || defaultImageForm()
+        }
+        return next
+      })
+      setImageEditForms(() => {
+        const next = {}
+        for (const category of data.images || []) {
+          for (const image of category.items || []) {
+            next[image.id] = defaultEditForm(image)
+          }
         }
         return next
       })
@@ -362,6 +441,16 @@ export default function AdminSite() {
       ...current,
       [categoryId]: {
         ...(current[categoryId] || defaultImageForm()),
+        [field]: value,
+      },
+    }))
+  }
+
+  const updateImageEditForm = (imageId, field, value) => {
+    setImageEditForms((current) => ({
+      ...current,
+      [imageId]: {
+        ...(current[imageId] || defaultImageForm()),
         [field]: value,
       },
     }))
@@ -492,6 +581,39 @@ export default function AdminSite() {
     })
   }
 
+  const saveImage = async (imageId) => {
+    await withBusy(`save-image-${imageId}`, async () => {
+      const form = imageEditForms[imageId]
+      const response = await fetch(`/api/images/${imageId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      })
+      const image = await parseApiResponse(response)
+
+      setStatus(`Updated ${image.title}.`)
+      await loadPortfolio()
+    })
+  }
+
+  const toggleFeatured = async (image) => {
+    const form = imageEditForms[image.id] || defaultEditForm(image)
+    await withBusy(`feature-image-${image.id}`, async () => {
+      const response = await fetch(`/api/images/${image.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          featured: !image.featured,
+        }),
+      })
+      const updated = await parseApiResponse(response)
+
+      setStatus(updated.featured ? `Featured ${updated.title}.` : `Removed featured from ${updated.title}.`)
+      await loadPortfolio()
+    })
+  }
+
   const requestImageDelete = (imageId) => {
     setConfirmAction({
       key: `delete-image-${imageId}`,
@@ -597,12 +719,20 @@ export default function AdminSite() {
                   key={category.id}
                   category={category}
                   imageForm={imageForms[category.id] || defaultImageForm()}
+                  imageEditForms={imageEditForms}
                   onImageFormChange={updateImageForm}
+                  onImageEditFormChange={updateImageEditForm}
                   onCategoryRename={renameCategory}
                   onCategoryDelete={requestCategoryDelete}
                   onImageCreate={createImage}
+                  onImageSave={saveImage}
+                  onImageToggleFeatured={toggleFeatured}
                   onImageDelete={requestImageDelete}
-                  busy={busyKey.startsWith("upload-") || busyKey.includes(category.id)}
+                  busy={
+                    busyKey.startsWith("upload-") ||
+                    busyKey.includes(category.id) ||
+                    category.items.some((image) => busyKey.includes(image.id))
+                  }
                 />
               ))}
             </div>
