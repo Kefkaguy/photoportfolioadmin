@@ -229,10 +229,12 @@ function CategoryEditor({
   busy,
 }) {
   const [draftName, setDraftName] = useState(category.category)
+  const [draftDescription, setDraftDescription] = useState(category.description || "")
 
   useEffect(() => {
     setDraftName(category.category)
-  }, [category.category])
+    setDraftDescription(category.description || "")
+  }, [category.category, category.description])
 
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(28,25,23,0.08)]">
@@ -244,19 +246,29 @@ function CategoryEditor({
           <p className="mt-2 text-sm text-stone-500">
             {category.items.length} image{category.items.length === 1 ? "" : "s"}
           </p>
+          <p className="mt-1 font-mono text-[11px] text-stone-400">/{category.slug}</p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            value={draftName}
-            onChange={(event) => setDraftName(event.target.value)}
-            className="min-w-[220px] rounded-full border border-stone-300 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition focus:border-stone-900"
-            placeholder="Category name"
-          />
+          <div className="flex min-w-[280px] flex-col gap-3">
+            <input
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              className="rounded-full border border-stone-300 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition focus:border-stone-900"
+              placeholder="Category name"
+            />
+            <textarea
+              value={draftDescription}
+              onChange={(event) => setDraftDescription(event.target.value)}
+              rows={3}
+              className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-stone-900"
+              placeholder='Category description, e.g. "This thing is cool because..."'
+            />
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => onCategoryRename(category.id, draftName)}
+              onClick={() => onCategoryRename(category.id, draftName, draftDescription)}
               disabled={busy}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-400"
             >
@@ -487,12 +499,15 @@ export default function AdminSite() {
     })
   }
 
-  const renameCategory = async (categoryId, categoryName) => {
+  const renameCategory = async (categoryId, categoryName, categoryDescription) => {
     await withBusy(`rename-${categoryId}`, async () => {
       const response = await fetch(`/api/categories/${categoryId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: categoryName }),
+        body: JSON.stringify({
+          category: categoryName,
+          description: categoryDescription,
+        }),
       })
       const data = await parseApiResponse(response)
 
