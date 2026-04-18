@@ -6,6 +6,7 @@ import {
   RiDeleteBin6Line,
   RiExternalLinkLine,
   RiLoader4Line,
+  RiPriceTag3Line,
   RiSave3Line,
   RiStarFill,
   RiStarLine,
@@ -41,6 +42,8 @@ function defaultImageForm() {
     aspectRatio: "4/5",
     featured: false,
     file: null,
+    subcategoryId: "",
+    tags: "",
   }
 }
 
@@ -51,7 +54,17 @@ function defaultEditForm(image) {
     description: image.description || "",
     aspectRatio: image.aspectRatio || "4/5",
     featured: Boolean(image.featured),
+    subcategoryId: image.subcategoryId || "",
+    tags: Array.isArray(image.tags) ? image.tags.map((tag) => `#${tag}`).join(", ") : "",
   }
+}
+
+function getSubcategoryImageCount(category, subcategoryId) {
+  return (category.items || []).filter((image) => image.subcategoryId === subcategoryId).length
+}
+
+function getUploadTargetLabel(category, subcategory) {
+  return subcategory ? `/${category.slug}/${subcategory.slug}` : `/${category.slug}`
 }
 
 async function getImageAspectRatio(file) {
@@ -124,9 +137,35 @@ function ConfirmModal({ action, busy, onCancel, onConfirm }) {
   )
 }
 
+function SubcategoryField({ item, onChange, onRemove, disabled }) {
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        value={item.name}
+        onChange={(event) => onChange(item.id, event.target.value)}
+        placeholder="Subcategory name"
+        className="flex-1 rounded-full border border-stone-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-stone-900"
+      />
+      <span className="rounded-full border border-stone-200 bg-stone-100 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+        /{item.slug || "slug"}
+      </span>
+      <button
+        type="button"
+        onClick={() => onRemove(item.id)}
+        disabled={disabled}
+        className="rounded-full border border-red-200 p-2 text-red-600 transition hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <RiDeleteBin6Line size={15} />
+      </button>
+    </div>
+  )
+}
+
 function ImageCard({
   image,
   form,
+  subcategories,
   busy,
   onChange,
   onSave,
@@ -170,6 +209,25 @@ function ImageCard({
           rows={3}
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
         />
+        <select
+          value={form.subcategoryId}
+          onChange={(event) => onChange(image.id, "subcategoryId", event.target.value)}
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+        >
+          <option value="">No subcategory</option>
+          {subcategories.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={form.tags}
+          onChange={(event) => onChange(image.id, "tags", event.target.value)}
+          placeholder="Tags, e.g. #Food, #Bread"
+          className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+        />
         <input
           type="text"
           value={form.aspectRatio}
@@ -177,6 +235,19 @@ function ImageCard({
           placeholder="Aspect ratio"
           className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
         />
+
+        {Array.isArray(image.tags) && image.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {image.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-stone-200 bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-stone-500"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flex items-center justify-between gap-2">
           <a
@@ -220,7 +291,7 @@ function CategoryEditor({
   imageEditForms,
   onImageFormChange,
   onImageEditFormChange,
-  onCategoryRename,
+  onCategorySave,
   onCategoryDelete,
   onImageCreate,
   onImageSave,
@@ -230,60 +301,168 @@ function CategoryEditor({
 }) {
   const [draftName, setDraftName] = useState(category.category)
   const [draftDescription, setDraftDescription] = useState(category.description || "")
+  const [draftSubcategories, setDraftSubcategories] = useState(category.subcategories || [])
+  const [newSubcategory, setNewSubcategory] = useState("")
+  const selectedSubcategory =
+    category.subcategories.find((item) => item.id === imageForm.subcategoryId) || null
+  const uploadTargetLabel = getUploadTargetLabel(category, selectedSubcategory)
 
   useEffect(() => {
     setDraftName(category.category)
     setDraftDescription(category.description || "")
-  }, [category.category, category.description])
+    setDraftSubcategories(category.subcategories || [])
+  }, [category.category, category.description, category.subcategories])
+
+  const updateSubcategory = (subcategoryId, value) => {
+    setDraftSubcategories((current) =>
+      current.map((item) =>
+        item.id === subcategoryId
+          ? {
+              ...item,
+              name: value,
+              slug: value
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, ""),
+            }
+          : item,
+      ),
+    )
+  }
+
+  const removeSubcategory = (subcategoryId) => {
+    setDraftSubcategories((current) => current.filter((item) => item.id !== subcategoryId))
+  }
+
+  const addSubcategory = () => {
+    const name = newSubcategory.trim()
+    if (!name) {
+      return
+    }
+
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+
+    setDraftSubcategories((current) => [
+      ...current,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        slug,
+      },
+    ])
+    setNewSubcategory("")
+  }
 
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(28,25,23,0.08)]">
-      <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
-            Category
-          </p>
-          <p className="mt-2 text-sm text-stone-500">
-            {category.items.length} image{category.items.length === 1 ? "" : "s"}
-          </p>
-          <p className="mt-1 font-mono text-[11px] text-stone-400">/{category.slug}</p>
+      <div className="flex flex-col gap-4 border-b border-stone-200 pb-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
+              Category
+            </p>
+            <p className="mt-2 text-sm text-stone-500">
+              {category.items.length} image{category.items.length === 1 ? "" : "s"}
+            </p>
+            <p className="mt-1 font-mono text-[11px] text-stone-400">/{category.slug}</p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className="flex min-w-[280px] flex-col gap-3">
+              <input
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+                className="rounded-full border border-stone-300 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition focus:border-stone-900"
+                placeholder="Category name"
+              />
+              <textarea
+                value={draftDescription}
+                onChange={(event) => setDraftDescription(event.target.value)}
+                rows={3}
+                className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-stone-900"
+                placeholder='Category description, e.g. "This thing is cool because..."'
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onCategorySave(category.id, draftName, draftDescription, draftSubcategories)
+                }
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+              >
+                <RiSave3Line size={16} />
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => onCategoryDelete(category.id, category.category)}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RiDeleteBin6Line size={16} />
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex min-w-[280px] flex-col gap-3">
-            <input
-              value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
-              className="rounded-full border border-stone-300 bg-stone-50 px-4 py-2.5 text-sm text-stone-900 outline-none transition focus:border-stone-900"
-              placeholder="Category name"
-            />
-            <textarea
-              value={draftDescription}
-              onChange={(event) => setDraftDescription(event.target.value)}
-              rows={3}
-              className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-stone-900"
-              placeholder='Category description, e.g. "This thing is cool because..."'
-            />
+        <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-700">
+                Subcategories
+              </h3>
+              <p className="mt-1 text-sm text-stone-500">
+                Add child sections inside {category.category}.
+              </p>
+            </div>
+            <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
+              {draftSubcategories.length} total
+            </span>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onCategoryRename(category.id, draftName, draftDescription)}
-              disabled={busy}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-400"
-            >
-              <RiSave3Line size={16} />
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategoryDelete(category.id, category.category)}
-              disabled={busy}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RiDeleteBin6Line size={16} />
-              Delete
-            </button>
+
+          <div className="space-y-3">
+            {draftSubcategories.map((item) => (
+              <div key={item.id} className="space-y-2 rounded-2xl border border-stone-200 bg-white p-3">
+                <SubcategoryField
+                  item={item}
+                  onChange={updateSubcategory}
+                  onRemove={removeSubcategory}
+                  disabled={busy}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 pl-1">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-stone-400">
+                    /{category.slug}/{item.slug} · {getSubcategoryImageCount(category, item.id)} image
+                    {getSubcategoryImageCount(category, item.id) === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newSubcategory}
+                onChange={(event) => setNewSubcategory(event.target.value)}
+                placeholder="Add subcategory, e.g. Raf'n'Roll"
+                className="flex-1 rounded-full border border-dashed border-stone-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-stone-900"
+              />
+              <button
+                type="button"
+                onClick={addSubcategory}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-full border border-stone-300 px-4 py-2.5 text-sm font-medium text-stone-700 transition hover:border-stone-900 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RiAddLine size={15} />
+                Add
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -297,13 +476,51 @@ function CategoryEditor({
             <div>
               <h3 className="text-lg font-semibold text-stone-900">Add image</h3>
               <p className="text-sm text-stone-500">
-                Upload to S3, store metadata in MongoDB.
+                1. Pick the destination. 2. Fill the image details. 3. Upload.
               </p>
             </div>
             <RiUploadCloud2Line className="text-stone-400" size={22} />
           </div>
 
           <div className="space-y-3">
+            <div className="rounded-[22px] border border-stone-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                Upload destination
+              </p>
+              <p className="mt-2 text-sm text-stone-500">
+                Choose whether this image belongs to the main category page or one specific subcategory page.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onImageFormChange(category.id, "subcategoryId", "")}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    !imageForm.subcategoryId
+                      ? "bg-stone-900 text-white"
+                      : "border border-stone-300 text-stone-600 hover:border-stone-900 hover:text-stone-900"
+                  }`}
+                >
+                  Main category
+                </button>
+                {category.subcategories.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onImageFormChange(category.id, "subcategoryId", item.id)}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                      imageForm.subcategoryId === item.id
+                        ? "bg-stone-900 text-white"
+                        : "border border-stone-300 text-stone-600 hover:border-stone-900 hover:text-stone-900"
+                    }`}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-600">
+                This image will be added to <span className="font-medium text-stone-900">{uploadTargetLabel}</span>
+              </div>
+            </div>
             <input
               required
               type="text"
@@ -332,6 +549,27 @@ function CategoryEditor({
               rows={4}
               className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
             />
+            <input
+              type="text"
+              value={uploadTargetLabel}
+              readOnly
+              className="w-full rounded-2xl border border-stone-200 bg-stone-100 px-4 py-3 text-sm text-stone-600 outline-none"
+            />
+            <label className="block">
+              <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                <RiPriceTag3Line size={14} />
+                Tags
+              </span>
+              <input
+                type="text"
+                value={imageForm.tags}
+                onChange={(event) =>
+                  onImageFormChange(category.id, "tags", event.target.value)
+                }
+                placeholder="Tags, e.g. #Food, #Bread"
+                className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+              />
+            </label>
             <input
               type="text"
               value={imageForm.aspectRatio}
@@ -382,6 +620,7 @@ function CategoryEditor({
               key={image.id}
               image={image}
               form={imageEditForms[image.id] || defaultEditForm(image)}
+              subcategories={category.subcategories}
               busy={busy}
               onChange={onImageEditFormChange}
               onSave={onImageSave}
@@ -499,7 +738,7 @@ export default function AdminSite() {
     })
   }
 
-  const renameCategory = async (categoryId, categoryName, categoryDescription) => {
+  const saveCategory = async (categoryId, categoryName, categoryDescription, subcategories) => {
     await withBusy(`rename-${categoryId}`, async () => {
       const response = await fetch(`/api/categories/${categoryId}`, {
         method: "PUT",
@@ -507,6 +746,7 @@ export default function AdminSite() {
         body: JSON.stringify({
           category: categoryName,
           description: categoryDescription,
+          subcategories,
         }),
       })
       const data = await parseApiResponse(response)
@@ -520,7 +760,7 @@ export default function AdminSite() {
     setConfirmAction({
       key: `delete-category-${categoryId}`,
       title: `Delete ${categoryName}?`,
-      message: "This will remove the category and all images inside it.",
+      message: "This will remove the category, its subcategories, and all images inside it.",
       run: async () => {
         await withBusy(`delete-category-${categoryId}`, async () => {
           const response = await fetch(`/api/categories/${categoryId}`, {
@@ -579,6 +819,8 @@ export default function AdminSite() {
           title: form.title,
           alt: form.alt,
           description: form.description,
+          subcategoryId: form.subcategoryId,
+          tags: form.tags,
           aspectRatio,
           featured: form.featured,
           src: signData.publicUrl,
@@ -737,7 +979,7 @@ export default function AdminSite() {
                   imageEditForms={imageEditForms}
                   onImageFormChange={updateImageForm}
                   onImageEditFormChange={updateImageEditForm}
-                  onCategoryRename={renameCategory}
+                  onCategorySave={saveCategory}
                   onCategoryDelete={requestCategoryDelete}
                   onImageCreate={createImage}
                   onImageSave={saveImage}
