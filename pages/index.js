@@ -4,6 +4,8 @@ import {
   RiAddLine,
   RiCloseLine,
   RiDeleteBin6Line,
+  RiArrowDownSLine,
+  RiArrowUpSLine,
   RiExternalLinkLine,
   RiLoader4Line,
   RiPriceTag3Line,
@@ -304,6 +306,7 @@ function CategoryEditor({
   const [draftIconFile, setDraftIconFile] = useState(null)
   const [draftSubcategories, setDraftSubcategories] = useState(category.subcategories || [])
   const [newSubcategory, setNewSubcategory] = useState("")
+  const [collapsed, setCollapsed] = useState(false)
   const selectedSubcategory =
     category.subcategories.find((item) => item.id === imageForm.subcategoryId) || null
   const uploadTargetLabel = getUploadTargetLabel(category, selectedSubcategory)
@@ -363,15 +366,25 @@ function CategoryEditor({
 
   return (
     <section className="rounded-[28px] border border-stone-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(28,25,23,0.08)]">
-      <div className="flex flex-col gap-4 border-b border-stone-200 pb-5">
+      <div className={`flex flex-col gap-4 ${collapsed ? "" : "border-b border-stone-200 pb-5"}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
               Category
             </p>
-            <p className="mt-2 text-sm text-stone-500">
-              {category.items.length} image{category.items.length === 1 ? "" : "s"}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <p className="text-sm text-stone-500">
+                {category.items.length} image{category.items.length === 1 ? "" : "s"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setCollapsed((current) => !current)}
+                className="inline-flex items-center gap-1 rounded-full border border-stone-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-600 transition hover:border-stone-900 hover:text-stone-900"
+              >
+                {collapsed ? <RiArrowDownSLine size={16} /> : <RiArrowUpSLine size={16} />}
+                {collapsed ? "Expand" : "Collapse"}
+              </button>
+            </div>
             <p className="mt-1 font-mono text-[11px] text-stone-400">/{category.slug}</p>
           </div>
 
@@ -424,6 +437,7 @@ function CategoryEditor({
           </div>
         </div>
 
+        {!collapsed ? (
         <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-4">
           <div className="mb-4 rounded-[22px] border border-stone-200 bg-white p-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-start">
@@ -530,8 +544,10 @@ function CategoryEditor({
             </div>
           </div>
         </div>
+        ) : null}
       </div>
 
+      {!collapsed ? (
       <div className="mt-6 grid gap-6 lg:grid-cols-[340px_1fr]">
         <form
           onSubmit={(event) => onImageCreate(event, category.id)}
@@ -685,6 +701,7 @@ function CategoryEditor({
           ) : null}
         </div>
       </div>
+      ) : null}
     </section>
   )
 }
