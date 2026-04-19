@@ -9,7 +9,6 @@ import {
   RiPriceTag3Line,
   RiSave3Line,
   RiStarFill,
-  RiStarLine,
   RiUploadCloud2Line,
 } from "react-icons/ri"
 
@@ -40,11 +39,14 @@ function defaultImageForm() {
     alt: "",
     description: "",
     aspectRatio: "4/5",
-    featured: false,
     file: null,
     subcategoryId: "",
     tags: "",
   }
+}
+
+function defaultFeaturedForm() {
+  return defaultImageForm()
 }
 
 function defaultEditForm(image) {
@@ -53,7 +55,6 @@ function defaultEditForm(image) {
     alt: image.alt || "",
     description: image.description || "",
     aspectRatio: image.aspectRatio || "4/5",
-    featured: Boolean(image.featured),
     subcategoryId: image.subcategoryId || "",
     tags: Array.isArray(image.tags) ? image.tags.map((tag) => `#${tag}`).join(", ") : "",
   }
@@ -64,7 +65,7 @@ function getSubcategoryImageCount(category, subcategoryId) {
 }
 
 function getUploadTargetLabel(category, subcategory) {
-  return subcategory ? `/${category.slug}/${subcategory.slug}` : `/${category.slug}`
+  return category ? (subcategory ? `/${category.slug}/${subcategory.slug}` : `/${category.slug}`) : ""
 }
 
 async function getImageAspectRatio(file) {
@@ -169,22 +170,20 @@ function ImageCard({
   busy,
   onChange,
   onSave,
-  onToggleFeatured,
   onDelete,
+  badge,
+  action,
 }) {
   return (
     <article className="overflow-hidden rounded-[24px] border border-stone-200 bg-stone-50">
       <div className="relative bg-stone-200" style={{ aspectRatio: image.aspectRatio || "4/5" }}>
         <img src={image.src} alt={image.alt} className="h-full w-full object-cover" />
-        <button
-          type="button"
-          onClick={() => onToggleFeatured(image)}
-          disabled={busy}
-          className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-white backdrop-blur transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {image.featured ? <RiStarFill size={14} /> : <RiStarLine size={14} />}
-          {image.featured ? "Featured" : "Set featured"}
-        </button>
+        {badge ? (
+          <div className="absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-white backdrop-blur">
+            {badge}
+          </div>
+        ) : null}
+        {action ? <div className="absolute right-3 top-3">{action}</div> : null}
       </div>
 
       <div className="space-y-3 p-4">
@@ -295,7 +294,6 @@ function CategoryEditor({
   onCategoryDelete,
   onImageCreate,
   onImageSave,
-  onImageToggleFeatured,
   onImageDelete,
   busy,
 }) {
@@ -476,7 +474,7 @@ function CategoryEditor({
             <div>
               <h3 className="text-lg font-semibold text-stone-900">Add image</h3>
               <p className="text-sm text-stone-500">
-                1. Pick the destination. 2. Fill the image details. 3. Upload.
+                Upload regular gallery images for this category or one of its subcategories.
               </p>
             </div>
             <RiUploadCloud2Line className="text-stone-400" size={22} />
@@ -525,18 +523,14 @@ function CategoryEditor({
               required
               type="text"
               value={imageForm.title}
-              onChange={(event) =>
-                onImageFormChange(category.id, "title", event.target.value)
-              }
+              onChange={(event) => onImageFormChange(category.id, "title", event.target.value)}
               placeholder="Image title"
               className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
             />
             <input
               type="text"
               value={imageForm.alt}
-              onChange={(event) =>
-                onImageFormChange(category.id, "alt", event.target.value)
-              }
+              onChange={(event) => onImageFormChange(category.id, "alt", event.target.value)}
               placeholder="Alt text"
               className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
             />
@@ -563,9 +557,7 @@ function CategoryEditor({
               <input
                 type="text"
                 value={imageForm.tags}
-                onChange={(event) =>
-                  onImageFormChange(category.id, "tags", event.target.value)
-                }
+                onChange={(event) => onImageFormChange(category.id, "tags", event.target.value)}
                 placeholder="Tags, e.g. #Food, #Bread"
                 className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
               />
@@ -579,16 +571,6 @@ function CategoryEditor({
               placeholder="Aspect ratio (e.g. 4/5)"
               className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
             />
-            <label className="flex items-center gap-2 rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700">
-              <input
-                type="checkbox"
-                checked={imageForm.featured}
-                onChange={(event) =>
-                  onImageFormChange(category.id, "featured", event.target.checked)
-                }
-              />
-              Mark as featured
-            </label>
             <label className="block rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-4 text-sm text-stone-500">
               <span className="mb-2 block font-medium text-stone-700">
                 Choose file
@@ -624,8 +606,8 @@ function CategoryEditor({
               busy={busy}
               onChange={onImageEditFormChange}
               onSave={onImageSave}
-              onToggleFeatured={onImageToggleFeatured}
               onDelete={onImageDelete}
+              badge={image.featured ? "Featured" : null}
             />
           ))}
 
@@ -640,16 +622,175 @@ function CategoryEditor({
   )
 }
 
+function FeaturedEditor({
+  featuredImages,
+  featuredForm,
+  imageEditForms,
+  onFeaturedFormChange,
+  onFeaturedImageCreate,
+  onImageEditFormChange,
+  onImageSave,
+  onImageUnfeature,
+  onImageDelete,
+  busy,
+}) {
+  return (
+    <section className="space-y-6">
+      <div className="rounded-[28px] border border-stone-200 bg-white/90 p-6 shadow-[0_24px_80px_rgba(28,25,23,0.08)]">
+        <div className="mb-6 flex flex-col gap-3 border-b border-stone-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-400">
+              Featured uploads
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-stone-900">
+              Upload images directly into the featured rail.
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-stone-500">
+              Images added here are used only in the homepage hero.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
+            <RiStarFill size={14} />
+            {featuredImages.length} featured image{featuredImages.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <form onSubmit={onFeaturedImageCreate} className="grid gap-6 lg:grid-cols-[380px_1fr]">
+          <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-stone-900">Add featured image</h3>
+                <p className="text-sm text-stone-500">
+                  Pick the destination first, then upload the image.
+                </p>
+              </div>
+              <RiUploadCloud2Line className="text-stone-400" size={22} />
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600">
+                This featured image will appear only in the homepage hero.
+              </div>
+
+              <input
+                required
+                type="text"
+                value={featuredForm.title}
+                onChange={(event) => onFeaturedFormChange("title", event.target.value)}
+                placeholder="Image title"
+                className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+              />
+              <input
+                type="text"
+                value={featuredForm.alt}
+                onChange={(event) => onFeaturedFormChange("alt", event.target.value)}
+                placeholder="Alt text"
+                className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+              />
+              <textarea
+                value={featuredForm.description}
+                onChange={(event) => onFeaturedFormChange("description", event.target.value)}
+                placeholder="Description"
+                rows={4}
+                className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+              />
+              <label className="block">
+                <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                  <RiPriceTag3Line size={14} />
+                  Tags
+                </span>
+                <input
+                  type="text"
+                  value={featuredForm.tags}
+                  onChange={(event) => onFeaturedFormChange("tags", event.target.value)}
+                  placeholder="Tags, e.g. #Food, #Bread"
+                  className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+                />
+              </label>
+              <input
+                type="text"
+                value={featuredForm.aspectRatio}
+                onChange={(event) => onFeaturedFormChange("aspectRatio", event.target.value)}
+                placeholder="Aspect ratio (e.g. 4/5)"
+                className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-stone-900"
+              />
+              <label className="block rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-4 text-sm text-stone-500">
+                <span className="mb-2 block font-medium text-stone-700">
+                  Choose file
+                </span>
+                <input
+                  required
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => onFeaturedFormChange("file", event.target.files?.[0] || null)}
+                  className="block w-full text-sm text-stone-500"
+                  disabled={busy}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={busy}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-400"
+              >
+                {busy ? <RiLoader4Line className="animate-spin" size={16} /> : <RiStarFill size={16} />}
+                Upload featured image
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {featuredImages.map((image) => (
+              <ImageCard
+                key={image.id}
+                image={image}
+                form={imageEditForms[image.id] || defaultEditForm(image)}
+                subcategories={[]}
+                busy={busy}
+                onChange={onImageEditFormChange}
+                onSave={onImageSave}
+                onDelete={onImageDelete}
+                badge={image.heroOnly ? "Hero only" : image.subcategorySlug ? `/${image.categorySlug}/${image.subcategorySlug}` : image.categorySlug ? `/${image.categorySlug}` : "Featured"}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => onImageUnfeature(image)}
+                    disabled={busy}
+                    className="inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium uppercase tracking-[0.14em] text-white backdrop-blur transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RiStarFill size={14} />
+                    {image.heroOnly ? "Remove from hero" : "Remove featured"}
+                  </button>
+                }
+              />
+            ))}
+
+            {featuredImages.length === 0 ? (
+              <div className="flex min-h-[280px] items-center justify-center rounded-[24px] border border-dashed border-stone-300 bg-stone-50 p-6 text-center text-sm text-stone-500 md:col-span-2 xl:col-span-3">
+                No featured images yet.
+              </div>
+            ) : null}
+          </div>
+        </form>
+      </div>
+    </section>
+  )
+}
+
 export default function AdminSite() {
   const [portfolio, setPortfolio] = useState({ images: [] })
+  const [activeTab, setActiveTab] = useState("categories")
   const [newCategory, setNewCategory] = useState("")
   const [status, setStatus] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState("")
   const [imageForms, setImageForms] = useState({})
+  const [featuredForm, setFeaturedForm] = useState(defaultFeaturedForm())
   const [imageEditForms, setImageEditForms] = useState({})
   const [confirmAction, setConfirmAction] = useState(null)
+
+  const categories = portfolio.images || []
+  const featuredImages = portfolio.featuredImages || []
 
   const loadPortfolio = async () => {
     setLoading(true)
@@ -667,6 +808,10 @@ export default function AdminSite() {
         }
         return next
       })
+      setFeaturedForm((current) => ({
+        ...defaultFeaturedForm(),
+        ...current,
+      }))
       setImageEditForms(() => {
         const next = {}
         for (const category of data.images || []) {
@@ -697,6 +842,13 @@ export default function AdminSite() {
     }))
   }
 
+  const updateFeaturedForm = (field, value) => {
+    setFeaturedForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
   const updateImageEditForm = (imageId, field, value) => {
     setImageEditForms((current) => ({
       ...current,
@@ -719,6 +871,61 @@ export default function AdminSite() {
     } finally {
       setBusyKey("")
     }
+  }
+
+  const uploadImage = async ({ categoryId, form, reset, featured, heroOnly = false }) => {
+    if (!form.file) {
+      throw new Error("Choose an image file first")
+    }
+
+    const aspectRatio = form.aspectRatio?.trim() || (await getImageAspectRatio(form.file))
+
+    const signResponse = await fetch("/api/uploads/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        categoryId,
+        heroOnly,
+        fileName: form.file.name,
+        contentType: form.file.type,
+      }),
+    })
+    const signData = await parseApiResponse(signResponse)
+
+    const uploadResponse = await fetch(signData.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": form.file.type || "application/octet-stream",
+      },
+      body: form.file,
+    })
+
+    if (!uploadResponse.ok) {
+      throw new Error("Upload to S3 failed")
+    }
+
+    const createResponse = await fetch("/api/images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(categoryId ? { categoryId } : {}),
+        title: form.title,
+        alt: form.alt,
+        description: form.description,
+        ...(heroOnly ? {} : { subcategoryId: form.subcategoryId }),
+        tags: form.tags,
+        aspectRatio,
+        featured,
+        heroOnly,
+        src: signData.publicUrl,
+        s3Key: signData.key,
+      }),
+    })
+    const createData = await parseApiResponse(createResponse)
+
+    reset()
+    setStatus(`Uploaded ${createData.title}.`)
+    await loadPortfolio()
   }
 
   const createCategory = async (event) => {
@@ -781,60 +988,34 @@ export default function AdminSite() {
 
     await withBusy(`upload-${categoryId}`, async () => {
       const form = imageForms[categoryId] || defaultImageForm()
-      if (!form.file) {
-        throw new Error("Choose an image file first")
-      }
 
-      const aspectRatio =
-        form.aspectRatio?.trim() || (await getImageAspectRatio(form.file))
-
-      const signResponse = await fetch("/api/uploads/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          categoryId,
-          fileName: form.file.name,
-          contentType: form.file.type,
-        }),
-      })
-      const signData = await parseApiResponse(signResponse)
-
-      const uploadResponse = await fetch(signData.uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": form.file.type || "application/octet-stream",
+      await uploadImage({
+        categoryId,
+        form,
+        featured: false,
+        reset: () => {
+          setImageForms((current) => ({
+            ...current,
+            [categoryId]: defaultImageForm(),
+          }))
         },
-        body: form.file,
       })
+    })
+  }
 
-      if (!uploadResponse.ok) {
-        throw new Error("Upload to S3 failed")
-      }
+  const createFeaturedImage = async (event) => {
+    event.preventDefault()
 
-      const createResponse = await fetch("/api/images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          categoryId,
-          title: form.title,
-          alt: form.alt,
-          description: form.description,
-          subcategoryId: form.subcategoryId,
-          tags: form.tags,
-          aspectRatio,
-          featured: form.featured,
-          src: signData.publicUrl,
-          s3Key: signData.key,
-        }),
+    await withBusy("upload-featured", async () => {
+      await uploadImage({
+        categoryId: null,
+        form: featuredForm,
+        featured: true,
+        heroOnly: true,
+        reset: () => {
+          setFeaturedForm(defaultFeaturedForm())
+        },
       })
-      const createData = await parseApiResponse(createResponse)
-
-      setImageForms((current) => ({
-        ...current,
-        [categoryId]: defaultImageForm(),
-      }))
-      setStatus(`Uploaded ${createData.title}.`)
-      await loadPortfolio()
     })
   }
 
@@ -853,20 +1034,34 @@ export default function AdminSite() {
     })
   }
 
-  const toggleFeatured = async (image) => {
+  const removeFeatured = async (image) => {
+    if (image.heroOnly) {
+      await withBusy(`delete-image-${image.id}`, async () => {
+        const response = await fetch(`/api/images/${image.id}`, {
+          method: "DELETE",
+        })
+        await parseApiResponse(response)
+
+        setStatus("Featured image removed.")
+        await loadPortfolio()
+      })
+      return
+    }
+
     const form = imageEditForms[image.id] || defaultEditForm(image)
+
     await withBusy(`feature-image-${image.id}`, async () => {
       const response = await fetch(`/api/images/${image.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          featured: !image.featured,
+          featured: false,
         }),
       })
       const updated = await parseApiResponse(response)
 
-      setStatus(updated.featured ? `Featured ${updated.title}.` : `Removed featured from ${updated.title}.`)
+      setStatus(`Removed featured from ${updated.title}.`)
       await loadPortfolio()
     })
   }
@@ -950,6 +1145,32 @@ export default function AdminSite() {
             </button>
           </div>
 
+          <div className="mb-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab("categories")}
+              className={`rounded-full px-5 py-2.5 text-sm font-medium transition ${
+                activeTab === "categories"
+                  ? "bg-stone-900 text-white"
+                  : "border border-stone-300 bg-white/80 text-stone-700 hover:border-stone-900 hover:text-stone-900"
+              }`}
+            >
+              Categories
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("featured")}
+              className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition ${
+                activeTab === "featured"
+                  ? "bg-stone-900 text-white"
+                  : "border border-stone-300 bg-white/80 text-stone-700 hover:border-stone-900 hover:text-stone-900"
+              }`}
+            >
+              <RiStarFill size={14} />
+              Featured
+            </button>
+          </div>
+
           {status ? (
             <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
               {status}
@@ -969,9 +1190,27 @@ export default function AdminSite() {
                 Loading portfolio
               </div>
             </div>
+          ) : activeTab === "featured" ? (
+            <FeaturedEditor
+              featuredImages={featuredImages}
+              featuredForm={featuredForm}
+              imageEditForms={imageEditForms}
+              onFeaturedFormChange={updateFeaturedForm}
+              onFeaturedImageCreate={createFeaturedImage}
+              onImageEditFormChange={updateImageEditForm}
+              onImageSave={saveImage}
+              onImageUnfeature={removeFeatured}
+              onImageDelete={requestImageDelete}
+              busy={
+                busyKey === "upload-featured" ||
+                busyKey.startsWith("feature-image-") ||
+                busyKey.startsWith("save-image-") ||
+                busyKey.startsWith("delete-image-")
+              }
+            />
           ) : (
             <div className="space-y-6">
-              {portfolio.images.map((category) => (
+              {categories.map((category) => (
                 <CategoryEditor
                   key={category.id}
                   category={category}
@@ -983,7 +1222,6 @@ export default function AdminSite() {
                   onCategoryDelete={requestCategoryDelete}
                   onImageCreate={createImage}
                   onImageSave={saveImage}
-                  onImageToggleFeatured={toggleFeatured}
                   onImageDelete={requestImageDelete}
                   busy={
                     busyKey.startsWith("upload-") ||

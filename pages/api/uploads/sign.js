@@ -14,24 +14,30 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { categoryId, fileName, contentType } = req.body || {}
+    const { categoryId, fileName, contentType, heroOnly } = req.body || {}
     const db = await getDb()
-    if (!ObjectId.isValid(categoryId)) {
-      throw new Error("Invalid category id")
-    }
+    let folder = "featured"
 
-    const category = await db.collection("categories").findOne({
-      _id: new ObjectId(categoryId),
-    })
+    if (!heroOnly) {
+      if (!ObjectId.isValid(categoryId)) {
+        throw new Error("Invalid category id")
+      }
 
-    if (!category) {
-      throw new Error("Category not found")
+      const category = await db.collection("categories").findOne({
+        _id: new ObjectId(categoryId),
+      })
+
+      if (!category) {
+        throw new Error("Category not found")
+      }
+
+      folder = category.folder || category.slug
     }
 
     const upload = await createSignedUpload({
       fileName,
       contentType,
-      folder: category.folder || category.slug,
+      folder,
     })
 
     return res.status(200).json(upload)
