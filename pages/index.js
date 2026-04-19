@@ -299,6 +299,9 @@ function CategoryEditor({
 }) {
   const [draftName, setDraftName] = useState(category.category)
   const [draftDescription, setDraftDescription] = useState(category.description || "")
+  const [draftIconSrc, setDraftIconSrc] = useState(category.iconSrc || "")
+  const [draftIconS3Key, setDraftIconS3Key] = useState(category.iconS3Key || "")
+  const [draftIconFile, setDraftIconFile] = useState(null)
   const [draftSubcategories, setDraftSubcategories] = useState(category.subcategories || [])
   const [newSubcategory, setNewSubcategory] = useState("")
   const selectedSubcategory =
@@ -308,8 +311,11 @@ function CategoryEditor({
   useEffect(() => {
     setDraftName(category.category)
     setDraftDescription(category.description || "")
+    setDraftIconSrc(category.iconSrc || "")
+    setDraftIconS3Key(category.iconS3Key || "")
+    setDraftIconFile(null)
     setDraftSubcategories(category.subcategories || [])
-  }, [category.category, category.description, category.subcategories])
+  }, [category.category, category.description, category.iconSrc, category.iconS3Key, category.subcategories])
 
   const updateSubcategory = (subcategoryId, value) => {
     setDraftSubcategories((current) =>
@@ -389,7 +395,15 @@ function CategoryEditor({
               <button
                 type="button"
                 onClick={() =>
-                  onCategorySave(category.id, draftName, draftDescription, draftSubcategories)
+                  onCategorySave(category.id, {
+                    categoryName: draftName,
+                    categoryDescription: draftDescription,
+                    subcategories: draftSubcategories,
+                    iconSrc: draftIconSrc,
+                    iconS3Key: draftIconS3Key,
+                    iconFile: draftIconFile,
+                    existingIconS3Key: category.iconS3Key || "",
+                  })
                 }
                 disabled={busy}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-400"
@@ -411,6 +425,59 @@ function CategoryEditor({
         </div>
 
         <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-4">
+          <div className="mb-4 rounded-[22px] border border-stone-200 bg-white p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start">
+              <div className="h-24 w-24 overflow-hidden rounded-3xl border border-stone-200 bg-stone-100">
+                {draftIconSrc ? (
+                  <img src={draftIconSrc} alt={`${category.category} icon`} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-[0.18em] text-stone-400">
+                    No icon
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-700">
+                    Category card image
+                  </h3>
+                  <p className="mt-1 text-sm text-stone-500">
+                    This image appears on the frontend card for {category.category}.
+                  </p>
+                </div>
+                <label className="block rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-sm text-stone-500">
+                  <span className="mb-2 block font-medium text-stone-700">Choose icon image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null
+                      setDraftIconFile(file)
+                      if (file) {
+                        setDraftIconSrc(URL.createObjectURL(file))
+                      }
+                    }}
+                    className="block w-full text-sm text-stone-500"
+                  />
+                </label>
+                {draftIconSrc ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftIconSrc("")
+                      setDraftIconS3Key("")
+                      setDraftIconFile(null)
+                    }}
+                    disabled={busy}
+                    className="rounded-full border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-900 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Remove icon
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-700">
@@ -945,8 +1012,43 @@ export default function AdminSite() {
     })
   }
 
-  const saveCategory = async (categoryId, categoryName, categoryDescription, subcategories) => {
+  const saveCategory = async (
+    categoryId,
+    { categoryName, categoryDescription, subcategories, iconSrc, iconS3Key, iconFile, existingIconS3Key },
+  ) => {
     await withBusy(`rename-${categoryId}`, async () => {
+      let nextIconSrc = iconSrc || ""
+      let nextIconS3Key = iconS3Key || ""
+
+      if (iconFile) {
+        const signResponse = await fetch("/api/uploads/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            categoryId,
+            assetType: "category-icon",
+            fileName: iconFile.name,
+            contentType: iconFile.type,
+          }),
+        })
+        const signData = await parseApiResponse(signResponse)
+
+        const uploadResponse = await fetch(signData.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": iconFile.type || "application/octet-stream",
+          },
+          body: iconFile,
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error("Upload to S3 failed")
+        }
+
+        nextIconSrc = signData.publicUrl
+        nextIconS3Key = signData.key
+      }
+
       const response = await fetch(`/api/categories/${categoryId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -954,6 +1056,9 @@ export default function AdminSite() {
           category: categoryName,
           description: categoryDescription,
           subcategories,
+          iconSrc: nextIconSrc,
+          iconS3Key: nextIconS3Key,
+          existingIconS3Key,
         }),
       })
       const data = await parseApiResponse(response)

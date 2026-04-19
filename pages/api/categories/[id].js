@@ -6,13 +6,17 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "PUT") {
+      const existingIconKey = typeof req.body?.existingIconS3Key === "string" ? req.body.existingIconS3Key : ""
       const category = await updateCategory(id, req.body || {})
+      if (existingIconKey && existingIconKey !== category.iconS3Key) {
+        await deleteS3Object(existingIconKey)
+      }
       return res.status(200).json(category)
     }
 
     if (req.method === "DELETE") {
       const result = await deleteCategory(id)
-      await Promise.all(result.imageKeys.map((key) => deleteS3Object(key)))
+      await Promise.all([...result.imageKeys, result.iconKey].filter(Boolean).map((key) => deleteS3Object(key)))
       return res.status(200).json({ deleted: true })
     }
 

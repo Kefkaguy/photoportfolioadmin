@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { categoryId, fileName, contentType, heroOnly } = req.body || {}
+    const { categoryId, fileName, contentType, heroOnly, assetType } = req.body || {}
     const db = await getDb()
     let folder = "featured"
 
@@ -31,7 +31,10 @@ export default async function handler(req, res) {
         throw new Error("Category not found")
       }
 
-      folder = category.folder || category.slug
+      folder =
+        assetType === "category-icon"
+          ? `${category.folder || category.slug}/category-icon`
+          : category.folder || category.slug
     }
 
     const upload = await createSignedUpload({
